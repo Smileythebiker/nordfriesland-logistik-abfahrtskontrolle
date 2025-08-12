@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nordfriesland Logistik – Abfahrtskontrolle (PWA)</title>
+  <meta name="theme-color" content="#0ea5e9" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+    .card { box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+    .sig-canvas { touch-action: none; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen py-6">
+  <div class="mx-auto max-w-3xl px-4">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold text-slate-900">Nordfriesland Logistik — Abfahrtskontrolle LKW</h1>
+      <p class="text-sm text-slate-600">Schnell abhaken, Mängel dokumentieren (<span class="font-semibold">Fotos – Pflicht bei Mangel</span>), unterschreiben, PDF erzeugen &amp; per E-Mail senden • <span class="font-semibold">Installierbar (PWA)</span></p>
+    </header>
+
+    <form id="checkForm" class="card bg-white rounded-2xl p-5 space-y-6">
+      <!-- Fahrer / Abteilung / Uhrzeit -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Abteilung</label>
+          <select id="department" required class="w-full rounded-xl border-slate-300 focus:ring-2 focus:ring-sky-400">
+            <option value="" disabled selected>Bitte wählen…</option>
+            <option>Edeka</option>
+            <option>Aldi</option>
+            <option>Dennree</option>
+            <option>Rossmann</option>
+            <option>Stückgut</option>
+            <option>KEP</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Fahrername</label>
+          <input id="driver" type="text" required placeholder="z. B. Marvin Hansen" class="w-full rounded-xl border-slate-300 focus:ring-2 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Kennzeichen / LKW-Nr. (optional)</label>
+          <input id="vehicle" type="text" placeholder="z. B. NF-AB 1234" class="w-full rounded-xl border-slate-300 focus:ring-2 focus:ring-sky-400" />
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Datum</label>
+          <input id="date" type="date" class="w-full rounded-xl border-slate-300" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Uhrzeit</label>
+          <input id="time" type="time" class="w-full rounded-xl border-slate-300" />
+        </div>
+        <div class="flex items-end gap-2">
+          <button type="button" id="nowBtn" class="w-full rounded-xl bg-slate-800 text-white py-2 font-semibold hover:bg-slate-900">Jetzt setzen</button>
+        </div>
+      </section>
+
+      <!-- Firmenlogo -->
+      <section class="grid grid-cols-1 gap-3">
+        <div class="rounded-2xl border border-slate-200 p-3 bg-slate-50">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Firmenlogo (optional)</label>
+          <input id="logoFile" type="file" accept="image/*" class="w-full" />
+          <img id="logoPreview" alt="Logo Vorschau" class="mt-2 hidden max-h-20 rounded-lg border border-slate-200" />
+          <p class="text-xs text-slate-500 mt-1">Wenn gesetzt, erscheint das Logo oben im PDF.</p>
+        </div>
+      </section>
+
+      <!-- Checkliste -->
+      <section>
+        <h2 class="text-lg font-semibold text-slate-900 mb-2">Checkliste</h2>
+        <p class="text-sm text-slate-600 mb-4">Für jeden Punkt wählen: <span class="font-semibold">OK</span> oder <span class="font-semibold">Mangel</span>. Bei <span class="font-semibold">Mangel</span> sind <span class="font-semibold">mindestens 1 Foto</span> und eine Beschreibung <span class="font-semibold">Pflicht</span>. Du kannst mehrere Fotos hinzufügen.</p>
+        <div id="checklist" class="space-y-3"></div>
+      </section>
+
+      <!-- Allgemeine Bemerkungen -->
+      <section>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Allgemeine Bemerkungen (optional)</label>
+        <textarea id="notes" rows="3" class="w-full rounded-xl border-slate-300 focus:ring-2 focus:ring-sky-400" placeholder="z. B. leichte Undichtigkeit am rechten Scheinwerfer…"></textarea>
+      </section>
+
+      <!-- Unterschrift -->
+      <section>
+        <h2 class="text-lg font-semibold text-slate-900 mb-2">Unterschrift des Fahrers</h2>
+        <p class="text-sm text-slate-600 mb-2">Bitte mit dem Finger oder der Maus unterschreiben.</p>
+        <div class="rounded-2xl border border-slate-300 p-3 bg-slate-50">
+          <canvas id="sigPad" width="700" height="180" class="sig-canvas w-full rounded-xl bg-white border border-slate-200"></canvas>
+          <div class="mt-2 flex gap-2">
+            <button type="button" id="sigClear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">Löschen</button>
+            <span id="sigHint" class="text-xs text-slate-500 self-center">Unterschrift erforderlich*</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Submit -->
+      <section class="flex flex-col md:flex-row gap-3">
+        <button type="submit" class="flex-1 rounded-xl bg-sky-600 text-white py-3 font-semibold hover:bg-sky-700">PDF erzeugen & senden</button>
+        <button type="button" id="downloadBtn" class="flex-1 rounded-xl border border-slate-300 py-3 font-semibold hover:bg-slate-50">Nur PDF downloaden</button>
+      </section>
+
+      <p id="status" class="text-sm text-slate-600"></p>
+    </form>
+
+    <footer class="mt-6 text-xs text-slate-500">© 2025 – Nordfriesland Logistik. Installiere diese Seite als App: Menü → „Zum Startbildschirm hinzufügen“.</footer>
+  </div>
+
+  <!-- jsPDF for PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    // --- PWA: Manifest + Service Worker dynamisch ---
+    (function setupPWA(){
+      // Icons on-the-fly erzeugen
+      function makeIcon(size){
+        const c=document.createElement('canvas'); c.width=c.height=size; const x=c.getContext('2d');
+        x.fillStyle='#0ea5e9'; x.fillRect(0,0,size,size);
+        x.fillStyle='#fff'; x.font = `${Math.floor(size*0.5)}px Arial`; x.textAlign='center'; x.textBaseline='middle';
+        x.fillText('NL', size/2, size/2);
+        return c.toDataURL('image/png');
+      }
+      const icon192 = makeIcon(192); const icon512 = makeIcon(512);
+
+      const manifest = {
+        name: 'Nordfriesland Logistik – Abfahrtskontrolle',
+        short_name: 'NL Abfahrt',
+        start_url: '.',
+        display: 'standalone',
+        background_color: '#ffffff',
+        theme_color: '#0ea5e9',
+        icons: [
+          { src: icon192, sizes: '192x192', type: 'image/png' },
+          { src: icon512, sizes: '512x512', type: 'image/png' }
+        ]
+      };
+      const blob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+      const manifestURL = URL.createObjectURL(blob);
+      const link = document.createElement('link'); link.rel='manifest'; link.href=manifestURL; document.head.appendChild(link);
+
+      // Service Worker code
+      const swCode = `
+        const CACHE = 'abfahrt-cache-v1';
+        self.addEventListener('install', (e)=>{
+          e.waitUntil((async()=>{
+            const cache = await caches.open(CACHE);
+            await cache.addAll(['./']);
+          })());
+          self.skipWaiting();
+        });
+        self.addEventListener('activate', (e)=>{ e.waitUntil(self.clients.claim()); });
+        self.addEventListener('fetch', (e)=>{
+          const req = e.request;
+          if (req.method !== 'GET') return;
+          e.respondWith((async()=>{
+            const cached = await caches.match(req);
+            if (cached) return cached;
+            try { const res = await fetch(req); const cache = await caches.open(CACHE); cache.put(req, res.clone()); return res; }
+            catch { return caches.match('./'); }
+          })());
+        });
+      `;
+      const swBlob = new Blob([swCode], {type:'text/javascript'});
+      const swUrl = URL.createObjectURL(swBlob);
+      if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register(swUrl).catch(console.warn);
+      } else {
+        console.warn('Service Worker benötigt HTTPS oder localhost.');
+      }
+    })();
+
+    // --- Konfiguration ---
+    const EMAIL_ENDPOINT = "https://script.google.com/macros/s/AKfycbxNiybLsL13_ZG2Xpqb-MOYd0wwVcrjAiNqK5iybJNdNqHdxuzYnywnMF9fXKsThFZTUw/exec"; // Apps Script Web-App URL
+    const EMAIL_TO = "k.thomsen@nf-log.de"; // Zieladresse
+    let LOGO_DATA_URL = '';
+
+    // Logo-Upload/Preview
+    const logoFile = document.getElementById('logoFile');
+    const logoPreview = document.getElementById('logoPreview');
+    if (logoFile) {
+      logoFile.addEventListener('change', async () => {
+        const f = logoFile.files && logoFile.files[0];
+        if (!f) { LOGO_DATA_URL = ''; logoPreview.classList.add('hidden'); return; }
+        const raw = await fileToDataUrl(f);
+        LOGO_DATA_URL = await resizeDataUrl(raw, 800);
+        logoPreview.src = LOGO_DATA_URL; logoPreview.classList.remove('hidden');
+      });
+    }
+
+    // Checkliste definieren
+    const ITEMS = [
+      { id: 'licht', label: 'Beleuchtung (Scheinwerfer, Blinker, Bremslicht)' },
+      { id: 'reifen', label: 'Reifen / Profiltiefe / Beschädigungen' },
+      { id: 'bremse', label: 'Bremsanlage / Druck / Leckagen' },
+      { id: 'lenkung', label: 'Lenkung / Spiel' },
+      { id: 'spiegel', label: 'Spiegel / Sicht' },
+      { id: 'flüssigkeiten', label: 'Flüssigkeiten (Öl, Kühlmittel, Wischwasser)' },
+      { id: 'warnmittel', label: 'Warndreieck / Warnweste / Verbandkasten' },
+      { id: 'ladung', label: 'Ladungssicherung' },
+      { id: 'kennzeichen', label: 'Kennzeichen / Plaketten' },
+      { id: 'fahrzeugpapiere', label: 'Fahrzeugpapiere / Führerschein / Fahrerkarte' },
+      { id: 'tacho', label: 'Tachograph / Bedienung / Ausdruck' },
+      { id: 'anhänger', label: 'Anhänger / Kupplung / Elektrik / Luft' },
+      { id: 'karosserie', label: 'Karosserie / Schäden / Undichtigkeiten' },
+    ];
+
+    const checklistEl = document.getElementById('checklist');
+    const statusEl = document.getElementById('status');
+
+    // --- Signature Pad ---
+    const sigCanvas = document.getElementById('sigPad');
+    const sigCtx = sigCanvas.getContext('2d');
+    sigCtx.lineWidth = 2; sigCtx.lineJoin = 'round'; sigCtx.lineCap = 'round';
+    let drawing = false, hasSignature = false, last = null;
+    function pos(e){ const r = sigCanvas.getBoundingClientRect(); const x = (e.touches?e.touches[0].clientX:e.clientX) - r.left; const y = (e.touches?e.touches[0].clientY:e.clientY) - r.top; return {x, y}; }
+    function start(e){ drawing = true; hasSignature = true; last = pos(e); }
+    function move(e){ if(!drawing) return; const p = pos(e); sigCtx.beginPath(); sigCtx.moveTo(last.x, last.y); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); last = p; e.preventDefault(); }
+    function end(){ drawing = false; }
+    sigCanvas.addEventListener('mousedown', start); sigCanvas.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+    sigCanvas.addEventListener('touchstart', start, {passive:false}); sigCanvas.addEventListener('touchmove', move, {passive:false}); window.addEventListener('touchend', end);
+    document.getElementById('sigClear').addEventListener('click', ()=>{ sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height); hasSignature=false; });
+
+    function renderChecklist() {
+      checklistEl.innerHTML = '';
+      ITEMS.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'rounded-xl border border-slate-200 p-3';
+        row.innerHTML = `
+          <div class="flex flex-col md:flex-row md:items-center gap-3">
+            <div class="flex-1">
+              <label class="font-medium text-slate-800">${item.label}</label>
+            </div>
+            <div class="flex items-center gap-4">
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="${item.id}" value="OK" class="text-sky-600" required />
+                <span>OK</span>
+              </label>
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="${item.id}" value="Mangel" class="text-sky-600" required />
+                <span>Mangel</span>
+              </label>
+            </div>
+          </div>
+          <div class="mt-3 hidden space-y-2" id="${item.id}-details-wrap">
+            <div>
+              <label class="block text-sm text-slate-700 mb-1">Mangelbeschreibung <span class="text-red-600">*</span></label>
+              <input id="${item.id}-details" type="text" class="w-full rounded-lg border-slate-300" placeholder="Was genau ist der Mangel?" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-700 mb-1">Fotos (<span class="text-red-600">mind. 1</span>)</label>
+              <input id="${item.id}-photo" type="file" accept="image/*" capture="environment" class="w-full" multiple />
+              <div id="${item.id}-previews" class="grid grid-cols-3 gap-2 mt-2"></div>
+            </div>
+          </div>
+        `;
+        checklistEl.appendChild(row);
+
+        // Toggle Details/Fotos bei "Mangel"
+        row.querySelectorAll(`input[name="${item.id}"]`).forEach(r => {
+          r.addEventListener('change', () => {
+            const wrap = document.getElementById(`${item.id}-details-wrap`);
+            if (r.value === 'Mangel' && r.checked) {
+              wrap.classList.remove('hidden');
+            } else if (r.value === 'OK' && r.checked) {
+              wrap.classList.add('hidden');
+            }
+          });
+        });
+
+        // Foto-Vorschau (mehrere)
+        const fileInput = row.querySelector(`#${item.id}-photo`);
+        const previews = row.querySelector(`#${item.id}-previews`);
+        fileInput.addEventListener('change', async () => {
+          previews.innerHTML = '';
+          const files = Array.from(fileInput.files || []);
+          for (const f of files) {
+            const url = await fileToDataUrl(f);
+            const img = document.createElement('img');
+            img.src = url; img.alt = 'Vorschau'; img.className = 'max-h-32 w-full object-cover rounded-lg border border-slate-200';
+            previews.appendChild(img);
+          }
+        });
+      });
+    }
+
+    function setNow() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      document.getElementById('date').value = d.toISOString().slice(0, 10);
+      document.getElementById('time').value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function fileToDataUrl(file){
+      return new Promise((resolve, reject)=>{
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function resizeDataUrl(dataUrl, maxW=1000){
+      return new Promise((resolve)=>{
+        const img = new Image();
+        img.onload = ()=>{
+          const scale = Math.min(1, maxW / img.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = dataUrl;
+      });
+    }
+
+    function collectData() {
+      const data = {
+        department: document.getElementById('department').value,
+        driver: document.getElementById('driver').value.trim(),
+        vehicle: document.getElementById('vehicle').value.trim(),
+        date: document.getElementById('date').value,
+        time: document.getElementById('time').value,
+        notes: document.getElementById('notes').value.trim(),
+        items: [],
+        signatureDataUrl: hasSignature ? sigCanvas.toDataURL('image/png') : ''
+      };
+
+      ITEMS.forEach(item => {
+        const selected = document.querySelector(`input[name="${item.id}"]:checked`);
+        const state = selected ? selected.value : '';
+        const detailsInput = document.getElementById(`${item.id}-details`);
+        const photoInput = document.getElementById(`${item.id}-photo`);
+        const files = photoInput && photoInput.files ? Array.from(photoInput.files) : [];
+        data.items.push({ id: item.id, label: item.label, state, details: detailsInput ? detailsInput.value.trim() : '', photoFiles: files });
+      });
+
+      return data;
+    }
+
+    async function enrichPhotos(data){
+      for (const it of data.items) {
+        if (it.photoFiles && it.photoFiles.length) {
+          it.photoDataUrls = [];
+          for (const f of it.photoFiles) {
+            const raw = await fileToDataUrl(f);
+            const resized = await resizeDataUrl(raw, 1200);
+            it.photoDataUrls.push(resized);
+          }
+        }
+      }
+      return data;
+    }
+
+    async function createPdf(data) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+      const margin = 40; let y = margin; const lineH = 18; const pageH = 842; const usableW = 515;
+
+      // Logo (falls vorhanden) oben rechts
+      if (LOGO_DATA_URL) { doc.addImage(LOGO_DATA_URL, 'JPEG', 420, y-10, 140, 40); }
+      // Brand
+      doc.setFont('helvetica','bold'); doc.setFontSize(12);
+      doc.text('Nordfriesland Logistik', margin, y); y += lineH;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+      doc.text('Abfahrtskontrolle LKW', margin, y); y += 10;
+
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); y += 20;
+      doc.text(`Abteilung: ${data.department}`, margin, y); y += lineH;
+      doc.text(`Fahrer: ${data.driver}`, margin, y); y += lineH;
+      if (data.vehicle) { doc.text(`Kennzeichen/LKW: ${data.vehicle}`, margin, y); y += lineH; }
+      doc.text(`Datum: ${data.date}    Zeit: ${data.time}`, margin, y); y += lineH + 10;
+
+      doc.setFont('helvetica', 'bold'); doc.text('Checkliste', margin, y); y += lineH; doc.setFont('helvetica', 'normal');
+
+      for (let idx = 0; idx < data.items.length; idx++) {
+        const it = data.items[idx];
+        const line = `${idx+1}. ${it.label} — ${it.state || '-'}${it.state==='Mangel' && it.details ? ' | ' + it.details : ''}`;
+        const split = doc.splitTextToSize(line, usableW);
+        if (y + split.length * lineH > pageH - 60) { doc.addPage(); y = margin; }
+        doc.text(split, margin, y); y += split.length * lineH;
+
+        // Fotos (mehrere) bei Mangel
+        if (it.state === 'Mangel' && it.photoDataUrls && it.photoDataUrls.length) {
+          const imgH = 140; const imgW = 210; // 2 pro Reihe
+          for (let p = 0; p < it.photoDataUrls.length; p++) {
+            if (p % 2 === 0 && (y + imgH + 12 > pageH - 60)) { doc.addPage(); y = margin; }
+            const x = margin + (p % 2) * (imgW + 10);
+            if (p % 2 === 0 && p !== 0) { y += imgH + 8; }
+            doc.addImage(it.photoDataUrls[p], 'JPEG', x, y, imgW, imgH);
+            if (p % 2 === 1) { y += imgH + 8; }
+          }
+          if (it.photoDataUrls.length % 2 === 1) { y += imgH + 8; }
+        }
+      }
+
+      if (data.notes) {
+        if (y + 2 * lineH > pageH - 60) { doc.addPage(); y = margin; }
+        y += 10; doc.setFont('helvetica', 'bold'); doc.text('Bemerkungen:', margin, y); y += lineH; doc.setFont('helvetica', 'normal');
+        const split = doc.splitTextToSize(data.notes, usableW);
+        doc.text(split, margin, y); y += split.length * lineH;
+      }
+
+      // Unterschrift
+      if (data.signatureDataUrl) {
+        if (y + 120 > pageH - 60) { doc.addPage(); y = margin; }
+        y += 10; doc.setFont('helvetica', 'bold'); doc.text('Unterschrift Fahrer:', margin, y); y += 6;
+        doc.addImage(data.signatureDataUrl, 'PNG', margin, y, 260, 80);
+        y += 90;
+      }
+
+      // Fußzeile
+      const footer = `Erzeugt am ${new Date().toLocaleString()} | © Nordfriesland Logistik`;
+      doc.setFontSize(8);
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) { doc.setPage(i); doc.text(footer, margin, 820); doc.text(String(i) + '/' + pageCount, 555, 820); }
+
+      const filename = `Abfahrtskontrolle_${data.date}_${(data.driver||'Fahrer').replace(/\s+/g,'_')}.pdf`;
+      return { doc, filename };
+    }
+
+    async function sendEmailWithPdf(base64Pdf, filename, meta) {
+      if (!EMAIL_ENDPOINT) { throw new Error('Kein E-Mail-Endpunkt konfiguriert.'); }
+      const payload = { to: EMAIL_TO, filename, pdfBase64: base64Pdf, meta };
+      // CORS-Workaround: im no-cors Modus senden
+      await fetch(EMAIL_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), mode: 'no-cors' });
+      return { ok: true };
+    }
+
+    document.getElementById('nowBtn').addEventListener('click', setNow);
+    renderChecklist(); setNow();
+
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'PDF wird erstellt…';
+        let data = collectData();
+        if (!data.department || !data.driver || !data.date || !data.time) { alert('Bitte Abteilung, Fahrer, Datum und Uhrzeit angeben.'); statusEl.textContent = ''; return; }
+        if (!data.signatureDataUrl) { alert('Bitte unterschreiben.'); statusEl.textContent = ''; return; }
+        // Pflichtprüfung: Bei Mangel mindestens 1 Foto + Beschreibung
+        for (const it of data.items) {
+          if (it.state === 'Mangel') {
+            if (!it.details) { alert(`Bitte Mangelbeschreibung angeben: ${it.label}`); statusEl.textContent = ''; return; }
+            const hasPhotos = it.photoFiles && it.photoFiles.length > 0;
+            if (!hasPhotos) { alert(`Mindestens 1 Foto erforderlich bei: ${it.label}`); statusEl.textContent = ''; return; }
+          }
+        }
+        data = await enrichPhotos(data);
+        const { doc, filename } = await createPdf(data);
+        doc.save(filename);
+        statusEl.textContent = 'PDF heruntergeladen.';
+      } catch (e) { console.error(e); statusEl.textContent = e.message || String(e); }
+    });
+
+    document.getElementById('checkForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.textContent = 'PDF wird erstellt & versendet…';
+      try {
+        let data = collectData();
+        if (!data.department || !data.driver || !data.date || !data.time) { alert('Bitte Abteilung, Fahrer, Datum und Uhrzeit angeben.'); statusEl.textContent = ''; return; }
+        if (!data.signatureDataUrl) { alert('Bitte unterschreiben.'); statusEl.textContent = ''; return; }
+        // Pflichtprüfung: Bei Mangel mindestens 1 Foto + Beschreibung
+        for (const it of data.items) {
+          if (it.state === 'Mangel') {
+            if (!it.details) { alert(`Bitte Mangelbeschreibung angeben: ${it.label}`); statusEl.textContent = ''; return; }
+            const hasPhotos = it.photoFiles && it.photoFiles.length > 0;
+            if (!hasPhotos) { alert(`Mindestens 1 Foto erforderlich bei: ${it.label}`); statusEl.textContent = ''; return; }
+          }
+        }
+        data = await enrichPhotos(data);
+        const { doc, filename } = await createPdf(data);
+        const pdfBlob = doc.output('blob');
+        const base64Pdf = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = reject; reader.readAsDataURL(pdfBlob); });
+        await sendEmailWithPdf(base64Pdf, filename, data);
+        statusEl.textContent = 'Versendet!';
+      } catch (err) { console.error(err); statusEl.textContent = err.message || String(err); }
+    });
+  </script>
+
+  <!-- ===================== Apps Script Backend (Referenz) =====================
+       1) Öffne https://script.google.com und lege ein neues Skript an.
+       2) Kopiere den folgenden Code in Code.gs
+       3) Ersetze EMPFÄNGER_EMAIL wenn abweichend.
+       4) Bereitstellen → Als Web-App bereitstellen → Zugriff: "Jeder, auch anonym".
+  -----------------------------------------------------------------------------
+  /**
+   * Apps Script (Code.gs)
+   */
+  const EMPFÄNGER_EMAIL = 'k.thomsen@nf-log.de';
+
+  function doPost(e) {
+    try {
+      const data = JSON.parse(e.postData.contents);
+      const to = data.to || EMPFÄNGER_EMAIL;
+      const filename = data.filename || 'Abfahrtskontrolle.pdf';
+      const pdfBytes = Utilities.base64Decode(data.pdfBase64);
+      const blob = Utilities.newBlob(pdfBytes, 'application/pdf', filename);
+
+      const meta = data.meta || {};
+      const subject = `Abfahrtskontrolle – ${meta.driver || ''} – ${meta.date || ''} ${meta.time || ''}`.trim();
+      const body = `Abteilung: ${meta.department || ''}\nFahrer: ${meta.driver || ''}\nFahrzeug: ${meta.vehicle || ''}\nDatum/Zeit: ${meta.date || ''} ${meta.time || ''}\n\nBemerkungen: ${meta.notes || ''}`;
+
+      GmailApp.sendEmail(to, subject, body, { attachments: [blob] });
+      return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'POST');
+    } catch (err) {
+      return ContentService.createTextOutput(String(err))
+        .setMimeType(ContentService.MimeType.TEXT)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'POST');
+    }
+  }
+  ===================== Ende Apps Script Backend ===================== -->
+</body>
+</html>
